@@ -1,13 +1,23 @@
 package com.tencent.assistd.activity;
 
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.res.Configuration;
+import android.graphics.Rect;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.tencent.assistd.R;
 import com.tencent.assistd.signal.Mobile;
@@ -38,6 +48,9 @@ import org.webrtc.VideoFrame;
 import org.webrtc.VideoSink;
 import org.webrtc.VideoTrack;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -53,14 +66,22 @@ public class MobileActivity extends AppCompatActivity {
     private EglBase mRootEglBase;
 
     private PeerConnection mPeerConnection;
+    private DataChannel mDataChannel;
     private PeerConnectionFactory mPeerConnectionFactory;
 
     private SurfaceViewRenderer mRemoteSurfaceView;
+    private ProxyVideoSink mVideoSink;
 
+    @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_mobile);
+
+        ActionBar actionBar = getSupportActionBar();
+        if (actionBar != null) {
+            actionBar.hide(); //隐藏标题栏
+        }
 
         mLogcatView = findViewById(R.id.LogcatView);
         mStartCallBtn = findViewById(R.id.StartCallButton);
@@ -81,12 +102,31 @@ public class MobileActivity extends AppCompatActivity {
         mRemoteSurfaceView.setMirror(false);
         mRemoteSurfaceView.setEnableHardwareScaler(false);
         mRemoteSurfaceView.setZOrderMediaOverlay(true);
-
-
+        mRemoteSurfaceView.setOnTouchListener(touchListener);
         mPeerConnectionFactory = createPeerConnectionFactory(this);
 
         // NOTE: this _must_ happen while PeerConnectionFactory is alive!
         Logging.enableLogToDebugOutput(Logging.Severity.LS_VERBOSE);
+    }
+
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+
+        // Checks the orientation of the screen
+        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            Toast.makeText(this, "横屏模式", Toast.LENGTH_SHORT).show();
+            Log.d(TAG, "onConfigurationChanged. 横屏模式");
+        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT){
+            Toast.makeText(this, "竖屏模式", Toast.LENGTH_SHORT).show();
+            Log.d(TAG, "onConfigurationChanged. 竖屏模式");
+        }
+        mRemoteSurfaceView.dispatchConfigurationChanged(newConfig);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
     }
 
     @Override
@@ -99,18 +139,78 @@ public class MobileActivity extends AppCompatActivity {
         RTCSignalClient.getInstance().leaveRoom();
     }
 
+    private View.OnTouchListener touchListener = new View.OnTouchListener() {
+        @SuppressLint("ClickableViewAccessibility")
+        @Override
+        public boolean onTouch(View v, MotionEvent event) {
+            if(mVideoSink == null) return true;
+            Rect r = new Rect();
+            mRemoteSurfaceView.getLocalVisibleRect(r);
+
+            float x = event.getX() / r.width();
+            float y = event.getY() / r.height();
+
+            int action = 0;
+
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN: action = 0; break;
+                case MotionEvent.ACTION_UP: action = 1; break;
+                case MotionEvent.ACTION_MOVE: action = 2; break;
+            }
+            try {
+                JSONObject jsonPos = new JSONObject();
+                jsonPos.put("x", x);
+                jsonPos.put("y", x);
+                jsonPos.put("width", mVideoSink.getWidth());
+                jsonPos.put("height", mVideoSink.getHeight());
+                JSONObject jsonMsg = new JSONObject();
+                jsonMsg.put("position", jsonPos);
+                jsonMsg.put("type", 2);
+                jsonMsg.put("action", action);
+                jsonMsg.put("buttons", 0);
+                jsonMsg.put("pressure", event.getPressure());
+                sendCtrl(jsonMsg);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+            return true;
+        }
+    };
+
+    private void sendCtrl(JSONObject msg) {
+        if(mDataChannel != null && mDataChannel.state() == DataChannel.State.OPEN) {
+            Log.d(TAG, "sendCtrl " + msg.toString());
+            ByteBuffer data = ByteBuffer.wrap(msg.toString().getBytes(StandardCharsets.UTF_8));
+            DataChannel.Buffer buffer = new DataChannel.Buffer(data, false);
+            mDataChannel.send(buffer);
+        }
+    }
+
     public static class ProxyVideoSink implements VideoSink {
         private VideoSink mTarget;
+        private int width = 0;
+        private int height = 0;
         @Override
         synchronized public void onFrame(VideoFrame frame) {
             if (mTarget == null) {
                 Log.d(TAG, "Dropping frame in proxy because target is null.");
                 return;
             }
+            width = frame.getRotatedWidth();
+            height = frame.getRotatedHeight();
+//            Log.d(TAG, "frame size. " + width + ", " + height);
             mTarget.onFrame(frame);
         }
         synchronized void setTarget(VideoSink target) {
             this.mTarget = target;
+        }
+
+        public int getWidth() {
+            return width;
+        }
+
+        public int getHeight() {
+            return height;
         }
     }
 
@@ -162,6 +262,7 @@ public class MobileActivity extends AppCompatActivity {
         logcatOnUI("Start Call, Wait ...");
         if (mPeerConnection == null) {
             mPeerConnection = createPeerConnection();
+            mDataChannel = mPeerConnection.createDataChannel("ClientDataChannel", new DataChannel.Init());
         }
         MediaConstraints mediaConstraints = new MediaConstraints();
         mediaConstraints.mandatory.add(new MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"));
@@ -185,9 +286,12 @@ public class MobileActivity extends AppCompatActivity {
     }
 
     public void doEndCall() {
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        mLogcatView.setVisibility(View.VISIBLE);
         logcatOnUI("End Call, Wait ...");
         hanup();
-        RTCSignalClient.getInstance().sendKickOut(selectedMobileId);
+//        RTCSignalClient.getInstance().sendKickOut(selectedMobileId);
     }
 
     private void hanup() {
@@ -195,6 +299,8 @@ public class MobileActivity extends AppCompatActivity {
         if (mPeerConnection == null) {
             return;
         }
+        mDataChannel.close();
+        mDataChannel = null;
         mPeerConnection.close();
         mPeerConnection = null;
         logcatOnUI("Hanup Done.");
@@ -305,10 +411,16 @@ public class MobileActivity extends AppCompatActivity {
                 Log.i(TAG, "onAddVideoTrack");
                 VideoTrack remoteVideoTrack = (VideoTrack) track;
                 remoteVideoTrack.setEnabled(true);
-                ProxyVideoSink videoSink = new ProxyVideoSink();
-                videoSink.setTarget(mRemoteSurfaceView);
-                remoteVideoTrack.addSink(videoSink);
+                mVideoSink = new ProxyVideoSink();
+                mVideoSink.setTarget(mRemoteSurfaceView);
+                remoteVideoTrack.addSink(mVideoSink);
+                runOnUiThread(() -> {
+                    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+                    mLogcatView.setVisibility(View.GONE);
+                });
             }else if(track instanceof AudioTrack) {
+                Log.i(TAG, "onAddAudioTrack");
 //                ((AudioTrack) track).setVolume(0);
             }
         }

@@ -160,7 +160,7 @@ public class RTCSignalClient {
         }
         try {
             JSONObject args = new JSONObject();
-            args.put("type", "offer");
+            args.put("type", "kickOut");
             JSONObject jsData = new JSONObject();
             jsData.put("to", mobileId);
             jsData.put("from", mUserId);
