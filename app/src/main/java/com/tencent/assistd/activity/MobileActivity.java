@@ -3,11 +3,13 @@ package com.tencent.assistd.activity;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.MotionEventCompat;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Rect;
+import android.icu.text.Transliterator;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.util.Log;
@@ -52,8 +54,12 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+
+import static android.view.MotionEvent.INVALID_POINTER_ID;
 
 public class MobileActivity extends AppCompatActivity {
     private TextView mLogcatView;
@@ -114,12 +120,15 @@ public class MobileActivity extends AppCompatActivity {
         super.onConfigurationChanged(newConfig);
 
         // Checks the orientation of the screen
-        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-            Toast.makeText(this, "横屏模式", Toast.LENGTH_SHORT).show();
-            Log.d(TAG, "onConfigurationChanged. 横屏模式");
-        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT){
-            Toast.makeText(this, "竖屏模式", Toast.LENGTH_SHORT).show();
-            Log.d(TAG, "onConfigurationChanged. 竖屏模式");
+//        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+//            Toast.makeText(this, "横屏模式", Toast.LENGTH_SHORT).show();
+//            Log.d(TAG, "onConfigurationChanged. 横屏模式");
+//        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT){
+//            Toast.makeText(this, "竖屏模式", Toast.LENGTH_LONG).show();
+//            Log.d(TAG, "onConfigurationChanged. 竖屏模式");
+//        }
+        if (mVideoSink != null) {
+            mVideoSink.setTarget(mRemoteSurfaceView);
         }
         mRemoteSurfaceView.dispatchConfigurationChanged(newConfig);
     }
@@ -139,50 +148,81 @@ public class MobileActivity extends AppCompatActivity {
         RTCSignalClient.getInstance().leaveRoom();
     }
 
+    private Map<Integer, int[]> mTouchPosMap = new HashMap<>();
     private View.OnTouchListener touchListener = new View.OnTouchListener() {
         @SuppressLint("ClickableViewAccessibility")
         @Override
-        public boolean onTouch(View v, MotionEvent event) {
+        public boolean onTouch(View v, MotionEvent ev) {
             if(mVideoSink == null) return true;
             Rect r = new Rect();
             mRemoteSurfaceView.getLocalVisibleRect(r);
 
-            float x = event.getX() / r.width();
-            float y = event.getY() / r.height();
+            final int index = ev.getActionIndex();
+            float x = ev.getX(index);
+            float y = ev.getY(index);
+            int pointerId = ev.getPointerId(index);
+            float pressure = ev.getPressure();
 
             int action = 0;
+            switch (ev.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                case MotionEvent.ACTION_POINTER_DOWN: {
+                    mTouchPosMap.remove(pointerId);
+                    break;
+                }
 
-            switch (event.getAction()) {
-                case MotionEvent.ACTION_DOWN: action = 0; break;
-                case MotionEvent.ACTION_UP: action = 1; break;
-                case MotionEvent.ACTION_MOVE: action = 2; break;
+                case MotionEvent.ACTION_MOVE: {
+                    action = 2;
+                    for (int i = 0; i < ev.getPointerCount(); i++) {
+                        pointerId = ev.getPointerId(i);
+                        x = ev.getX(i);
+                        y = ev.getY(i);
+                        int[] posCache = mTouchPosMap.get(pointerId);
+                        if (posCache != null && posCache.length == 2 && (int)x == posCache[0] && (int)y == posCache[1]){
+                            return true;
+                        }
+                        mTouchPosMap.put(pointerId, new int[]{(int)x, (int)y});
+                        sendCtrl(action, x / r.width(), y / r.height(), mVideoSink.getWidth(), mVideoSink.getHeight(), pointerId, pressure);
+                    }
+                    return true;
+                }
+
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_POINTER_UP: {
+                    action = 1;
+                    mTouchPosMap.remove(pointerId);
+                    break;
+                }
+                default: return true;
             }
-            try {
-                JSONObject jsonPos = new JSONObject();
-                jsonPos.put("x", x);
-                jsonPos.put("y", x);
-                jsonPos.put("width", mVideoSink.getWidth());
-                jsonPos.put("height", mVideoSink.getHeight());
-                JSONObject jsonMsg = new JSONObject();
-                jsonMsg.put("position", jsonPos);
-                jsonMsg.put("type", 2);
-                jsonMsg.put("action", action);
-                jsonMsg.put("buttons", 0);
-                jsonMsg.put("pressure", event.getPressure());
-                sendCtrl(jsonMsg);
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
+            x = x / r.width();
+            y = y / r.height();
+            sendCtrl(action, x, y, mVideoSink.getWidth(), mVideoSink.getHeight(), pointerId, pressure);
             return true;
         }
     };
 
-    private void sendCtrl(JSONObject msg) {
+    private void sendCtrl(int action, float x, float y, int w, int h, int pointerId, float pressure) {
         if(mDataChannel != null && mDataChannel.state() == DataChannel.State.OPEN) {
-            Log.d(TAG, "sendCtrl " + msg.toString());
-            ByteBuffer data = ByteBuffer.wrap(msg.toString().getBytes(StandardCharsets.UTF_8));
-            DataChannel.Buffer buffer = new DataChannel.Buffer(data, false);
-            mDataChannel.send(buffer);
+            try {
+                JSONObject jsonPos = new JSONObject();
+                jsonPos.put("x", x);
+                jsonPos.put("y", y);
+                jsonPos.put("width", w);
+                jsonPos.put("height", h);
+                JSONObject jsonMsg = new JSONObject();
+                jsonMsg.put("position", jsonPos);
+                jsonMsg.put("type", 2);
+                jsonMsg.put("action", action);
+                jsonMsg.put("pointerId", pointerId);
+                jsonMsg.put("pressure", pressure);
+                Log.d(TAG, "sendCtrl " + jsonMsg.toString());
+                ByteBuffer data = ByteBuffer.wrap(jsonMsg.toString().getBytes(StandardCharsets.UTF_8));
+                DataChannel.Buffer buffer = new DataChannel.Buffer(data, false);
+                mDataChannel.send(buffer);
+            } catch (JSONException e) {
+                Log.e(TAG, "onTouchSend err: " + e.getMessage());
+            }
         }
     }
 
@@ -198,7 +238,6 @@ public class MobileActivity extends AppCompatActivity {
             }
             width = frame.getRotatedWidth();
             height = frame.getRotatedHeight();
-//            Log.d(TAG, "frame size. " + width + ", " + height);
             mTarget.onFrame(frame);
         }
         synchronized void setTarget(VideoSink target) {
@@ -227,7 +266,7 @@ public class MobileActivity extends AppCompatActivity {
 
         @Override
         public void onCreateFailure(String msg) {
-            Log.e(TAG, "SdpObserver onCreateFailure: " + msg);
+            Log.i(TAG, "SdpObserver onCreateFailure: " + msg);
         }
 
         @Override
