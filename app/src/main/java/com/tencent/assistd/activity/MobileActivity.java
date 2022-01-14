@@ -1,29 +1,38 @@
 package com.tencent.assistd.activity;
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.ActionBar;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.view.MotionEventCompat;
-
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.Configuration;
+import android.graphics.Color;
 import android.graphics.Rect;
-import android.icu.text.Transliterator;
+import android.media.AudioManager;
 import android.os.Bundle;
-import android.os.PowerManager;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.util.Log;
+import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.Window;
 import android.view.WindowManager;
-import android.widget.Button;
+import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.view.KeyEvent;
 
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.ActionBar;
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.internal.NavigationMenu;
 import com.tencent.assistd.R;
+import com.tencent.assistd.adapter.MobileListAdapter;
 import com.tencent.assistd.signal.Mobile;
 import com.tencent.assistd.signal.RTCSignalClient;
+import com.tencent.assistd.utils.Settings;
+import com.tencent.assistd.utils.VolumeChangeObserver;
+import com.tencent.assistd.widgets.DragFloatActionButton;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -51,23 +60,19 @@ import org.webrtc.VideoSink;
 import org.webrtc.VideoTrack;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
-import static android.view.MotionEvent.INVALID_POINTER_ID;
+import io.github.yavski.fabspeeddial.FabSpeedDial;
+import io.github.yavski.fabspeeddial.SimpleMenuListenerAdapter;
 
 public class MobileActivity extends AppCompatActivity {
-    private TextView mLogcatView;
-    private Button mStartCallBtn;
-    private Button mEndCallBtn;
-
     private static final String TAG = "MobileActivity";
-    private static final String selectedMobileId = "LKN5T19520004193";
+    private final int MAX_VOL = 25;
+    private String selectedMobileId;
 
     private EglBase mRootEglBase;
 
@@ -77,6 +82,15 @@ public class MobileActivity extends AppCompatActivity {
 
     private SurfaceViewRenderer mRemoteSurfaceView;
     private ProxyVideoSink mVideoSink;
+    private AudioTrack mAudioTrack;
+    private double mAudioTrackVol;
+    private AudioManager mAudioManager;
+    private VolumeChangeObserver mVolumeChangeObserver;
+
+    private ListView mMobileListView;
+    private TextView mMobileListViewTips;
+    private DragFloatActionButton mMobileCtrlFloatBtn;
+    private MobileListAdapter mMobileListAdapter;
 
     @SuppressLint("ClickableViewAccessibility")
     @Override
@@ -88,21 +102,27 @@ public class MobileActivity extends AppCompatActivity {
         if (actionBar != null) {
             actionBar.hide(); //隐藏标题栏
         }
+        mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        mVolumeChangeObserver = new VolumeChangeObserver(this);
 
-        mLogcatView = findViewById(R.id.LogcatView);
-        mStartCallBtn = findViewById(R.id.StartCallButton);
-        mEndCallBtn = findViewById(R.id.EndCallButton);
+
+        mMobileCtrlFloatBtn = findViewById(R.id.mobileCtrlFloat);
+        mMobileCtrlFloatBtn.setPosRightTop();
+        mMobileCtrlFloatBtn.setMenuListener(ctrlMenuListener);
+        mMobileListViewTips = findViewById(R.id.mobileListViewTips);
+        mMobileListView = findViewById(R.id.mobileListView);
+        mMobileListAdapter = new MobileListAdapter(this, R.layout.layout_mobile_list_item, mobileListListener);
+        mMobileListView.setAdapter(mMobileListAdapter);
 
         RTCSignalClient.getInstance().setSignalEventListener(mOnSignalEventListener);
 
-        String serverAddr = getIntent().getStringExtra("ServerAddr");
+        String serverAddr = getIntent().getStringExtra(Settings.SERVER_ADDRESS);
         assert serverAddr != null;
         RTCSignalClient.getInstance().joinRoom(serverAddr);
 
         mRootEglBase = EglBase.create();
 
         mRemoteSurfaceView = findViewById(R.id.RemoteSurfaceView);
-
         mRemoteSurfaceView.init(mRootEglBase.getEglBaseContext(), null);
         mRemoteSurfaceView.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT);
         mRemoteSurfaceView.setMirror(false);
@@ -110,7 +130,6 @@ public class MobileActivity extends AppCompatActivity {
         mRemoteSurfaceView.setZOrderMediaOverlay(true);
         mRemoteSurfaceView.setOnTouchListener(touchListener);
         mPeerConnectionFactory = createPeerConnectionFactory(this);
-
         // NOTE: this _must_ happen while PeerConnectionFactory is alive!
         Logging.enableLogToDebugOutput(Logging.Severity.LS_VERBOSE);
     }
@@ -127,15 +146,21 @@ public class MobileActivity extends AppCompatActivity {
 //            Toast.makeText(this, "竖屏模式", Toast.LENGTH_LONG).show();
 //            Log.d(TAG, "onConfigurationChanged. 竖屏模式");
 //        }
-        if (mVideoSink != null) {
-            mVideoSink.setTarget(mRemoteSurfaceView);
-        }
+        mMobileCtrlFloatBtn.dispatchConfigurationChanged(newConfig);
         mRemoteSurfaceView.dispatchConfigurationChanged(newConfig);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        mVolumeChangeObserver.setVolumeChangeListener(volumeChangeListener);
+        mVolumeChangeObserver.registerReceiver();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mVolumeChangeObserver.unregisterReceiver();
     }
 
     @Override
@@ -147,6 +172,46 @@ public class MobileActivity extends AppCompatActivity {
         PeerConnectionFactory.shutdownInternalTracer();
         RTCSignalClient.getInstance().leaveRoom();
     }
+
+    private FabSpeedDial.MenuListener ctrlMenuListener = new SimpleMenuListenerAdapter() {
+        @Override
+        public boolean onPrepareMenu(NavigationMenu navigationMenu) {
+            @SuppressLint("RestrictedApi") MenuItem menuItem = navigationMenu.findItem(R.id.action_mute);
+            if(menuItem != null) {
+                String cancelString = getResources().getString(R.string.cancel);
+                String muteString = getResources().getString(R.string.mobile_ctrl_mute);
+                menuItem.setVisible(mAudioTrack != null);
+                menuItem.setTitle((isMuted ? cancelString : "") + muteString);
+            }
+            if(mMobileCtrlFloatBtn.isTopRight()) mMobileCtrlFloatBtn.setX(mMobileCtrlFloatBtn.getX() - 62);
+            return true ; //false : dont show menu
+        }
+
+        @Override
+        public boolean onMenuItemSelected(MenuItem menuItem) {
+            switch (menuItem.getItemId()) {
+                case R.id.action_back: sendBackOrScreenOn(); break;
+                case R.id.action_home: sendKeyPress(KeyEvent.KEYCODE_HOME); break;
+                case R.id.action_recent: sendKeyPress(KeyEvent.KEYCODE_APP_SWITCH); break;
+                case R.id.action_mute: switchAudioMute(); break;
+                case R.id.action_exit: onExitMobileConnect(); break;
+            }
+            return true;
+        }
+
+        @Override
+        public void onMenuClosed() {
+            if(mMobileCtrlFloatBtn.isTopRight()) {
+                new Handler().postDelayed(() -> {
+                    mMobileCtrlFloatBtn.setX(mMobileCtrlFloatBtn.getX() + 62);
+                },getResources().getInteger(android.R.integer.config_shortAnimTime)-1);
+            }
+        }
+    };
+
+//    public void onCtrlGroupClick(View view) {
+//        mPopupButtonMenu.show();
+//    }
 
     private Map<Integer, int[]> mTouchPosMap = new HashMap<>();
     private View.OnTouchListener touchListener = new View.OnTouchListener() {
@@ -167,6 +232,7 @@ public class MobileActivity extends AppCompatActivity {
             switch (ev.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                 case MotionEvent.ACTION_POINTER_DOWN: {
+                    mMobileCtrlFloatBtn.closeMenu();
                     mTouchPosMap.remove(pointerId);
                     break;
                 }
@@ -202,29 +268,93 @@ public class MobileActivity extends AppCompatActivity {
         }
     };
 
-    private void sendCtrl(int action, float x, float y, int w, int h, int pointerId, float pressure) {
+    private void sendChannelMsg(String msg) {
+        Log.d(TAG, "sendCtrl " + msg);
         if(mDataChannel != null && mDataChannel.state() == DataChannel.State.OPEN) {
-            try {
-                JSONObject jsonPos = new JSONObject();
-                jsonPos.put("x", x);
-                jsonPos.put("y", y);
-                jsonPos.put("width", w);
-                jsonPos.put("height", h);
-                JSONObject jsonMsg = new JSONObject();
-                jsonMsg.put("position", jsonPos);
-                jsonMsg.put("type", 2);
-                jsonMsg.put("action", action);
-                jsonMsg.put("pointerId", pointerId);
-                jsonMsg.put("pressure", pressure);
-                Log.d(TAG, "sendCtrl " + jsonMsg.toString());
-                ByteBuffer data = ByteBuffer.wrap(jsonMsg.toString().getBytes(StandardCharsets.UTF_8));
-                DataChannel.Buffer buffer = new DataChannel.Buffer(data, false);
-                mDataChannel.send(buffer);
-            } catch (JSONException e) {
-                Log.e(TAG, "onTouchSend err: " + e.getMessage());
-            }
+            ByteBuffer data = ByteBuffer.wrap(msg.getBytes(StandardCharsets.UTF_8));
+            DataChannel.Buffer buffer = new DataChannel.Buffer(data, false);
+            mDataChannel.send(buffer);
         }
     }
+
+    private void sendCtrl(int action, float x, float y, int w, int h, int pointerId, float pressure) {
+        try {
+            JSONObject jsonPos = new JSONObject();
+            jsonPos.put("x", x);
+            jsonPos.put("y", y);
+            jsonPos.put("width", w);
+            jsonPos.put("height", h);
+            JSONObject jsonMsg = new JSONObject();
+            jsonMsg.put("position", jsonPos);
+            jsonMsg.put("type", 2);
+            jsonMsg.put("action", action);
+            jsonMsg.put("pointerId", pointerId);
+            jsonMsg.put("pressure", pressure);
+            sendChannelMsg(jsonMsg.toString());
+        } catch (JSONException e) {
+            Log.e(TAG, "onTouchSend err: " + e.getMessage());
+        }
+    }
+
+    private void sendKeyPress(int keyCode) {
+        try {
+            JSONObject jsonMsg = new JSONObject();
+            jsonMsg.put("type", 0);
+            jsonMsg.put("action", 0);
+            jsonMsg.put("keyCode", keyCode);
+            jsonMsg.put("metaState", 0);
+            jsonMsg.put("repeat", 0);
+            sendChannelMsg(jsonMsg.toString());
+            jsonMsg.put("action", 1);
+            sendChannelMsg(jsonMsg.toString());
+        } catch (JSONException e) {
+            Log.e(TAG, "onKeyPressSend err: " + e.getMessage());
+        }
+    }
+
+    private void sendBackOrScreenOn() {
+        try {
+            JSONObject jsonMsg = new JSONObject();
+            jsonMsg.put("type", 4);
+            jsonMsg.put("action", 0);
+            sendChannelMsg(jsonMsg.toString());
+            jsonMsg.put("action", 1);
+            sendChannelMsg(jsonMsg.toString());
+        } catch (JSONException e) {
+            Log.e(TAG, "onBackOrScreenOnSend err: " + e.getMessage());
+        }
+    }
+
+    public void onExitMobileConnect() {
+        new MaterialAlertDialogBuilder(this).setTitle(R.string.exit_mobile_connect)
+                .setPositiveButton(R.string.confirm, (dialog, which) -> {
+                    doEndCall();
+                })
+                .setNegativeButton(R.string.cancel, (dialog, which) -> {
+                    // 点击“返回”后的操作,这里不设置没有任何操作
+                }).show();
+    }
+
+    private boolean isMuted = false;
+    private void switchAudioMute() {
+        if (mAudioTrack != null) {
+            mAudioTrack.setVolume(isMuted ? mAudioTrackVol : 0);
+            Log.i(TAG, "set vol is " + (isMuted ? mAudioTrackVol : 0));
+            isMuted = !isMuted;
+        }
+    }
+
+    private VolumeChangeObserver.VolumeChangeListener volumeChangeListener = new VolumeChangeObserver.VolumeChangeListener() {
+        @Override
+        public void onVolumeChanged(int volume) {
+            Log.i(TAG, "set vol is mAudioTrack != null: " + (mAudioTrack != null));
+            mAudioTrackVol = volume * 1.0 / MAX_VOL;
+            Log.i(TAG, "set vol is " + mAudioTrackVol);
+            if(mAudioTrack != null && !isMuted) {
+                mAudioTrack.setVolume(mAudioTrackVol);
+            }
+        }
+    };
 
     public static class ProxyVideoSink implements VideoSink {
         private VideoSink mTarget;
@@ -275,34 +405,46 @@ public class MobileActivity extends AppCompatActivity {
         }
     }
 
-    public void onClickStartCallButton(View v) {
-        doStartCall();
-    }
+    private MobileListAdapter.IMobileListListener mobileListListener = new MobileListAdapter.IMobileListListener() {
+        @Override
+        public void onConnect(Mobile mobile) {
+            doStartCall(mobile.Id);
+        }
 
-    public void onClickEndCallButton(View v) {
-        doEndCall();
-    }
+        @Override
+        public void onReset(Mobile mobile) {
+            RTCSignalClient.getInstance().sendKickOut(mobile.Id);
+        }
+    };
 
     private void updateCallState(boolean idle) {
         runOnUiThread(() -> {
             if (idle) {
-                mStartCallBtn.setVisibility(View.VISIBLE);
-                mEndCallBtn.setVisibility(View.GONE);
+//                mStartCallBtn.setVisibility(View.VISIBLE);
+//                mEndCallBtn.setVisibility(View.GONE);
                 mRemoteSurfaceView.setVisibility(View.GONE);
+                mMobileCtrlFloatBtn.setVisibility(View.GONE);
+                mMobileListView.setVisibility(View.VISIBLE);
+                mMobileListViewTips.setVisibility(View.VISIBLE);
+                getWindow().getDecorView().setBackgroundColor(Color.WHITE);
             } else {
-                mStartCallBtn.setVisibility(View.GONE);
-                mEndCallBtn.setVisibility(View.VISIBLE);
+//                mStartCallBtn.setVisibility(View.GONE);
+//                mEndCallBtn.setVisibility(View.VISIBLE);
+                getWindow().getDecorView().setBackgroundColor(Color.BLACK);
                 mRemoteSurfaceView.setVisibility(View.VISIBLE);
+                mMobileCtrlFloatBtn.setVisibility(View.VISIBLE);
+                mMobileListView.setVisibility(View.GONE);
+                mMobileListViewTips.setVisibility(View.GONE);
             }
         });
     }
 
-    public void doStartCall() {
-        logcatOnUI("Start Call, Wait ...");
+    public void doStartCall(String mobileId) {
         if (mPeerConnection == null) {
             mPeerConnection = createPeerConnection();
             mDataChannel = mPeerConnection.createDataChannel("ClientDataChannel", new DataChannel.Init());
         }
+        selectedMobileId = mobileId;
         MediaConstraints mediaConstraints = new MediaConstraints();
         mediaConstraints.mandatory.add(new MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"));
         mediaConstraints.mandatory.add(new MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"));
@@ -316,7 +458,7 @@ public class MobileActivity extends AppCompatActivity {
                 try {
                     message.put("type", "offer");
                     message.put("sdp", sessionDescription.description);
-                    RTCSignalClient.getInstance().sendOffer(selectedMobileId, message);
+                    RTCSignalClient.getInstance().sendOffer(mobileId, message);
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -327,22 +469,19 @@ public class MobileActivity extends AppCompatActivity {
     public void doEndCall() {
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        mLogcatView.setVisibility(View.VISIBLE);
-        logcatOnUI("End Call, Wait ...");
         hanup();
-//        RTCSignalClient.getInstance().sendKickOut(selectedMobileId);
     }
 
     private void hanup() {
-        logcatOnUI("Hanup Call, Wait ...");
         if (mPeerConnection == null) {
             return;
         }
+        mVideoSink = null;
+        mAudioTrack = null;
         mDataChannel.close();
         mDataChannel = null;
         mPeerConnection.close();
         mPeerConnection = null;
-        logcatOnUI("Hanup Done.");
         updateCallState(true);
     }
 
@@ -456,37 +595,50 @@ public class MobileActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                     getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-                    mLogcatView.setVisibility(View.GONE);
                 });
             }else if(track instanceof AudioTrack) {
-                Log.i(TAG, "onAddAudioTrack");
-//                ((AudioTrack) track).setVolume(0);
+                mAudioTrack = (AudioTrack) track;
+                mAudioManager.setMode(AudioManager.MODE_NORMAL);
+                mAudioManager.setSpeakerphoneOn(true);
+                mAudioTrackVol = mAudioManager.getStreamVolume(AudioManager.STREAM_MUSIC) * 1.0 / MAX_VOL;
+                Log.i(TAG, "set vol is " + mAudioTrackVol);
+                mAudioTrack.setVolume(mAudioTrackVol);
+                Log.i(TAG, "onAddAudioTrack current vol is " + mAudioTrackVol);
             }
         }
     };
 
     private final RTCSignalClient.OnSignalEventListener mOnSignalEventListener = new RTCSignalClient.OnSignalEventListener() {
 
+        @SuppressLint("DefaultLocale")
         @Override
         public void onRemoteUserList(List<Mobile> mobileList) {
-
+            Log.d(TAG, "update mobile list, " + mobileList.size());
+            runOnUiThread(() -> {
+                mMobileListViewTips.setText(String.format("已连接设备（%d）", mobileList.size()));
+                mMobileListAdapter.clear();
+                if(mobileList.size() > 0) {
+                    mMobileListAdapter.addAll(mobileList);
+                }
+                mMobileListAdapter.notifyDataSetChanged();
+            });
         }
 
         @Override
         public void onAnswer(JSONObject description) {
-            logcatOnUI("Receive Remote Answer ...");
+            Log.i(TAG, "Receive Remote Answer ...");
             try {
                 String sdp = description.getString("sdp");
                 mPeerConnection.setRemoteDescription(new SimpleSdpObserver(), new SessionDescription(SessionDescription.Type.ANSWER, sdp));
             } catch (JSONException e) {
-                logcatOnUI("Receive Remote Answer Error, " + e.getMessage());
+                Log.e(TAG, "Receive Remote Answer Error, " + e.getMessage());
             }
             updateCallState(false);
         }
 
         @Override
         public void onCandidate(JSONObject candidate) {
-            logcatOnUI("Receive Remote Candidate ...");
+            Log.i(TAG, "Receive Remote Candidate ...");
             try {
                 IceCandidate remoteIceCandidate = new IceCandidate(
                         candidate.getString("sdpMid"),
@@ -495,21 +647,43 @@ public class MobileActivity extends AppCompatActivity {
                 );
                 mPeerConnection.addIceCandidate(remoteIceCandidate);
             } catch (JSONException e) {
-                logcatOnUI("Receive Remote Candidate Error, " + e.getMessage());
+                Log.e(TAG, "Receive Remote Candidate Error, " + e.getMessage());
             }
         }
 
-        private void onRemoteHangup(String userId) {
-            logcatOnUI("Receive Remote Hanup Event ..." + userId);
+        @Override
+        public void onRemoteHangup(String userId) {
+            Log.e(TAG, "Receive Remote Hanup Event ..." + userId);
             hanup();
         }
     };
 
-    private void logcatOnUI(String msg) {
-        Log.i(TAG, msg);
-        runOnUiThread(() -> {
-            String output = mLogcatView.getText() + "\n" + msg;
-            mLogcatView.setText(output);
-        });
+    @Override
+    public void onBackPressed() {
+        if (mPeerConnection == null) {
+            super.onBackPressed();
+        }else {
+            prepareBack();
+        }
+    }
+
+    private static boolean isExit = false;
+    @SuppressLint("HandlerLeak")
+    Handler exitHandler = new Handler(Looper.getMainLooper()) {
+        @Override
+        public void handleMessage(@NonNull Message msg) {
+            super.handleMessage(msg);
+            isExit = false;
+        }
+    };
+    public void prepareBack() {
+        if (!isExit) {
+            isExit = true;
+            Toast.makeText(getApplicationContext(), "再按一次退出",
+                    Toast.LENGTH_SHORT).show();
+            exitHandler.sendMessageDelayed(new Message(), 2000);
+        } else {
+            doEndCall();
+        }
     }
 }

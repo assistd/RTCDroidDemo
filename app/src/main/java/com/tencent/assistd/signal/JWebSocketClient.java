@@ -33,6 +33,7 @@ public class JWebSocketClient extends WebSocketClient {
     @Override
     public void onClose(int code, String reason, boolean remote) {
         Log.i(TAG, "onClose, " + code + remote + reason);
+        messageListener.onClose(code, reason, remote);
     }
 
     @Override

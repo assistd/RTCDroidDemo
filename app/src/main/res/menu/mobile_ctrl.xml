@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="30dp"
+    android:layout_height="30dp"
+    tools:ignore="PrivateResource">
+
+    <item
+        android:id="@+id/action_back"
+        android:title="@string/mobile_ctrl_back"
+        android:icon="@mipmap/ic_launcher" />
+    <item
+        android:id="@+id/action_home"
+        android:title="@string/mobile_ctrl_home"
+        android:icon="@mipmap/ic_launcher" />
+    <item
+        android:id="@+id/action_recent"
+        android:title="@string/mobile_ctrl_recent"
+        android:icon="@drawable/ic_start" />
+    <item
+        android:id="@+id/action_mute"
+        android:title="@string/mobile_ctrl_mute"
+        android:icon="@mipmap/ic_launcher" />
+    <item
+        android:id="@+id/action_exit"
+        android:icon="@drawable/ic_start"
+        android:title="@string/mobile_ctrl_exit" />
+
+</menu>

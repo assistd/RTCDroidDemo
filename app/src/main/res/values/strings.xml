@@ -11,6 +11,16 @@
     <string name="hello_second_fragment">Hello second fragment. Arg: %1$s</string>
 
     <string name="join_room">Join</string>
-    <string name="server_tips">信令服务器: </string>
+    <string name="exit_mobile_connect">确认退出手机连接吗？</string>
+    <string name="confirm">确认</string>
+    <string name="cancel">取消</string>
+    <string name="connect">连接</string>
+    <string name="server_tips">信令服务器</string>
     <string name="default_server">172.16.12.218:8089</string>
+    <string name="reset">重置</string>
+    <string name="mobile_ctrl_back">返回</string>
+    <string name="mobile_ctrl_home">主页</string>
+    <string name="mobile_ctrl_recent">最近</string>
+    <string name="mobile_ctrl_mute">静音</string>
+    <string name="mobile_ctrl_exit">退出</string>
 </resources>

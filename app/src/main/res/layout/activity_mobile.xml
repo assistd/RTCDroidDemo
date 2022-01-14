@@ -1,40 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     xmlns:tools="http://schemas.android.com/tools"
-    tools:context=".activity.MobileActivity"
-    android:background="@color/colorBlack">
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    tools:context=".activity.MobileActivity">
     <org.webrtc.SurfaceViewRenderer
         android:id="@+id/RemoteSurfaceView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center"/>
-
+        android:visibility="invisible"
+        android:layout_gravity="center"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
     <TextView
-        android:id="@+id/LogcatView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_margin="5dp"
-        android:textColor="@android:color/white"
-        android:layout_gravity="top|start" />
+        android:id="@+id/mobileListViewTips"
+        android:layout_width="match_parent"
+        android:layout_height="20dp"
+        android:layout_margin="10dp"
+        android:gravity="bottom"
+        android:text=""
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
+    <ListView
+        android:id="@+id/mobileListView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="30dp"/>
 
-    <Button
-        android:id="@+id/StartCallButton"
+    <com.tencent.assistd.widgets.DragFloatActionButton
+        android:id="@+id/mobileCtrlFloat"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="30dp"
-        android:background="@drawable/startcall_button_selector"
-        android:layout_gravity="bottom|center"
-        android:onClick="onClickStartCallButton" />
-
-    <Button
-        android:id="@+id/EndCallButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="30dp"
-        android:background="@drawable/endcall_btn_selector"
-        android:layout_gravity="bottom|center"
-        android:visibility="gone"
-        android:onClick="onClickEndCallButton" />
-</FrameLayout>
+        android:gravity="top|start"
+        app:fabGravity="top_start"
+        app:fabMenu="@menu/mobile_ctrl"
+        app:miniFabTitleBackgroundTint="@android:color/white"
+        app:miniFabDrawableTint="@color/colorPrimary"
+        app:miniFabTitleTextColor="@color/colorPrimary"
+        tools:ignore="MissingConstraints" />
+</androidx.constraintlayout.widget.ConstraintLayout>

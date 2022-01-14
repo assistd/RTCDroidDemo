@@ -5,6 +5,7 @@
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
+        <item name="colorSurface">@android:color/white</item>
     </style>
 
     <style name="AppTheme.NoActionBar">
@@ -15,5 +16,12 @@
     <style name="AppTheme.AppBarOverlay" parent="ThemeOverlay.AppCompat.Dark.ActionBar" />
 
     <style name="AppTheme.PopupOverlay" parent="ThemeOverlay.AppCompat.Light" />
+
+    <style name="PopupButtonMenu" parent="Widget.AppCompat.PopupMenu">
+        <item name="android:textColor">@android:color/transparent</item>
+        <item name="android:itemBackground">@color/colorPink</item>
+        <item name="android:layout_width">30dp</item>
+        <item name="android:width">30dp</item>
+    </style>
 
 </resources>

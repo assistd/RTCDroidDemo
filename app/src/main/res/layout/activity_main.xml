@@ -7,14 +7,15 @@
     tools:context=".activity.MainActivity">
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical" >
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_margin="10dp"
-            android:text="@string/server_tips" />
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingLeft="10dp"
+        android:paddingRight="10dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:ignore="MissingConstraints">
 
         <EditText
             android:id="@+id/ServerEditText"
@@ -22,27 +23,22 @@
             android:layout_height="wrap_content"
             android:layout_marginLeft="10dp"
             android:layout_marginRight="10dp"
-            android:text="@string/default_server" />
-
-        <!--    <TextView-->
-        <!--        android:layout_width="match_parent"-->
-        <!--        android:layout_height="wrap_content"-->
-        <!--        android:layout_margin="10dp"-->
-        <!--        android:text="@string/room_tips" />-->
-
-        <!--    <EditText-->
-        <!--        android:id="@+id/RoomEditText"-->
-        <!--        android:layout_width="match_parent"-->
-        <!--        android:layout_height="wrap_content"-->
-        <!--        android:layout_marginLeft="10dp"-->
-        <!--        android:layout_marginRight="10dp" />-->
+            android:layout_marginBottom="20dp"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:autofillHints=""
+            android:gravity="center"
+            android:layout_gravity="center"
+            android:inputType="textAutoComplete"
+            android:hint="@string/server_tips"/>
 
         <Button
-            android:id="@+id/JoinRoomBtn"
+            android:id="@+id/ConnectSignalServerBtn"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_margin="10dp"
-            android:text="@string/join_room" />
-
+            android:background="@drawable/btn_blue_material"
+            android:textColor="#FFFFFF"
+            android:text="@string/connect" />
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

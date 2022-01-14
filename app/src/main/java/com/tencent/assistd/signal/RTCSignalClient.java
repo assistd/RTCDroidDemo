@@ -2,6 +2,7 @@ package com.tencent.assistd.signal;
 
 import android.util.Log;
 
+import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -25,6 +26,7 @@ public class RTCSignalClient {
         void onRemoteUserList(List<Mobile> mobileList);
         void onAnswer(JSONObject description);
         void onCandidate(JSONObject candidate);
+        void onRemoteHangup(String userId);
     }
 
     public static RTCSignalClient getInstance() {
@@ -38,10 +40,6 @@ public class RTCSignalClient {
 
     public void setSignalEventListener(final OnSignalEventListener listener) {
         mOnSignalEventListener = listener;
-    }
-
-    public String getUserId() {
-        return mUserId;
     }
 
     public void joinRoom(String url) {
@@ -81,6 +79,11 @@ public class RTCSignalClient {
                         Log.i(TAG, "joinRoom error: " + e.getMessage());
                     }
                 }
+
+                @Override
+                public void onClose(int code, String reason, boolean remote) {
+                    closeSocket();
+                }
             });
             mSocket.connect();
         } catch (URISyntaxException e) {
@@ -102,9 +105,8 @@ public class RTCSignalClient {
             jsData.put("userType", 0);
             jsData.put("roomId", mRoomName);
             args.put("data", jsData);
-            mSocket.send(args.toString());
-            mSocket.close();
-            mSocket = null;
+            sendMsg(args.toString());
+            closeSocket();
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -125,7 +127,7 @@ public class RTCSignalClient {
             jsData.put("description", description);
             args.put("data", jsData);
             Log.d(TAG, "sendOffer: " + args.toString());
-            mSocket.send(args.toString());
+            sendMsg(args.toString());
         } catch (JSONException e) {
             Log.e(TAG, "sendOffer err: " + e.getMessage());
         }
@@ -133,9 +135,6 @@ public class RTCSignalClient {
 
     public void sendCandidate(String mobileId, JSONObject description) {
         Log.i(TAG, "candidate: " + mobileId + (mSocket == null));
-        if (mSocket == null) {
-            return;
-        }
         try {
             JSONObject args = new JSONObject();
             args.put("type", "candidate");
@@ -147,7 +146,7 @@ public class RTCSignalClient {
             jsData.put("description", description);
             args.put("data", jsData);
             Log.d(TAG, "sendCandidate: " + args.toString());
-            mSocket.send(args.toString());
+            sendMsg(args.toString());
         } catch (JSONException e) {
             Log.e(TAG, "sendCandidate err: " + e.getMessage());
         }
@@ -155,9 +154,6 @@ public class RTCSignalClient {
 
     public void sendKickOut(String mobileId) {
         Log.i(TAG, "kickOut: " + mRoomName);
-        if (mSocket == null) {
-            return;
-        }
         try {
             JSONObject args = new JSONObject();
             args.put("type", "kickOut");
@@ -167,7 +163,7 @@ public class RTCSignalClient {
             jsData.put("roomId", mRoomName);
             jsData.put("sessionId", mSessionId);
             args.put("data", jsData);
-            mSocket.send(args.toString());
+            sendMsg(args.toString());
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -177,7 +173,11 @@ public class RTCSignalClient {
         List<Mobile> list = new ArrayList<>();
         for (int i = 0; i < jsonArray.length(); i++) {
             JSONObject mobileObj = jsonArray.getJSONObject(i);
-            Mobile mobile = new Mobile(mobileObj.getString("id"), mobileObj.getString("name"));
+            Mobile mobile = new Mobile(
+                    mobileObj.getString("id"),
+                    mobileObj.getString("name"),
+                    mobileObj.getInt("status")
+            );
             list.add(mobile);
         }
         mOnSignalEventListener.onRemoteUserList(list);
@@ -185,9 +185,6 @@ public class RTCSignalClient {
 
     private String mSessionId = "";
     private void listenSignalEvents(String message) throws JSONException {
-        if (mSocket == null) {
-            return;
-        }
         JSONObject result = new JSONObject(message);
         String type = result.getString("type");
         Log.d(TAG, "listenSignalEvents, type: " + type);
@@ -195,9 +192,28 @@ public class RTCSignalClient {
             case "updateUserList": updateUserList(result.getJSONArray("data"));break;
             case "answer":
                 mOnSignalEventListener.onAnswer(result.getJSONObject("data").getJSONObject("description"));
-                mSessionId = result.getString("sessionId");
+                mSessionId = result.getJSONObject("data").getString("sessionId");
                 break;
             case "candidate": mOnSignalEventListener.onCandidate(result.getJSONObject("data").getJSONObject("candidate"));break;
+            case "hangup":
+                mOnSignalEventListener.onRemoteHangup(result.getJSONObject("data").getString("from"));
+                break;
         }
+    }
+
+    private void sendMsg(String msg) {
+        if (mSocket == null || mSocket.isClosed()) {
+            return;
+        }
+        try {
+            mSocket.send(msg);
+        }catch (WebsocketNotConnectedException ignore){}
+    }
+
+    private void closeSocket() {
+        try {
+            if(mSocket != null && !mSocket.isClosed()) mSocket.close();
+            mSocket = null;
+        }catch (Exception ignore){}
     }
 }
