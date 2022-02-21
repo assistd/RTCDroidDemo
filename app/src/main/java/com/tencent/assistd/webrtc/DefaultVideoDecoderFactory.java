@@ -34,12 +34,12 @@ public class DefaultVideoDecoderFactory implements VideoDecoderFactory {
         if (softwareDecoder == null && this.platformSoftwareVideoDecoderFactory != null) {
             softwareDecoder = this.platformSoftwareVideoDecoderFactory.createDecoder(codecType);
         }
-
-        if (hardwareDecoder != null && softwareDecoder != null) {
-            return new VideoDecoderFallback(softwareDecoder, hardwareDecoder);
-        } else {
-            return hardwareDecoder != null ? hardwareDecoder : softwareDecoder;
-        }
+        return hardwareDecoder != null ? hardwareDecoder : softwareDecoder;
+//        if (hardwareDecoder != null && softwareDecoder != null) {
+//            return new VideoDecoderFallback(softwareDecoder, hardwareDecoder);
+//        } else {
+//            return hardwareDecoder != null ? hardwareDecoder : softwareDecoder;
+//        }
     }
 
     public VideoCodecInfo[] getSupportedCodecs() {

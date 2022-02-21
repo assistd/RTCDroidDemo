@@ -27,6 +27,8 @@ public interface MediaCodecWrapper {
 
     void releaseOutputBuffer(int var1, boolean var2);
 
+    void releaseOutputBuffer(int var1, long var2);
+
     MediaFormat getOutputFormat();
 
     ByteBuffer[] getInputBuffers();

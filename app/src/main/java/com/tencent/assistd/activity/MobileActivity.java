@@ -6,6 +6,8 @@ import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.media.AudioManager;
+import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -91,6 +93,9 @@ public class MobileActivity extends AppCompatActivity {
     private DragFloatActionButton mMobileCtrlFloatBtn;
     private MobileListAdapter mMobileListAdapter;
 
+    private WifiManager.WifiLock highPerfWifiLock;
+    private WifiManager.WifiLock lowLatencyWifiLock;
+
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -129,8 +134,26 @@ public class MobileActivity extends AppCompatActivity {
         mRemoteSurfaceView.setZOrderMediaOverlay(true);
         mRemoteSurfaceView.setOnTouchListener(touchListener);
         mPeerConnectionFactory = createPeerConnectionFactory(this);
+
+        // Change volume button behavior
+        setVolumeControlStream(AudioManager.STREAM_MUSIC);
+        makeWifiManager();
+
         // NOTE: this _must_ happen while PeerConnectionFactory is alive!
         Logging.enableLogToDebugOutput(Logging.Severity.LS_VERBOSE);
+    }
+
+    public void makeWifiManager() {
+        WifiManager wifiMgr = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        highPerfWifiLock = wifiMgr.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Assistd High Perf Lock");
+        highPerfWifiLock.setReferenceCounted(false);
+        highPerfWifiLock.acquire();
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            lowLatencyWifiLock = wifiMgr.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "Assistd Low Latency Lock");
+            lowLatencyWifiLock.setReferenceCounted(false);
+            lowLatencyWifiLock.acquire();
+        }
     }
 
     @Override
@@ -167,6 +190,12 @@ public class MobileActivity extends AppCompatActivity {
         super.onDestroy();
         doEndCall();
         mRemoteSurfaceView.release();
+        if (lowLatencyWifiLock != null) {
+            lowLatencyWifiLock.release();
+        }
+        if (highPerfWifiLock != null) {
+            highPerfWifiLock.release();
+        }
         PeerConnectionFactory.stopInternalTracingCapture();
         PeerConnectionFactory.shutdownInternalTracer();
         RTCSignalClient.getInstance().leaveRoom();

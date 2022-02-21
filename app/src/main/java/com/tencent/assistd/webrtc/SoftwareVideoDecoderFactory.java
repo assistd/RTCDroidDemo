@@ -6,7 +6,6 @@ import androidx.annotation.Nullable;
 
 import org.webrtc.LibvpxVp8Decoder;
 import org.webrtc.LibvpxVp9Decoder;
-
 import org.webrtc.VideoCodecInfo;
 import org.webrtc.VideoDecoder;
 import org.webrtc.VideoDecoderFactory;
@@ -55,8 +54,8 @@ public class SoftwareVideoDecoderFactory implements VideoDecoderFactory {
     static boolean nativeVp9IsSupported() {
         try {
 
-            Method method = LibvpxVp9Decoder.class.getDeclaredMethod("nativeIsSupported");
-            return  (boolean) method.invoke(null);
+            Method newInstanceMethod = LibvpxVp9Decoder.class.getDeclaredMethod("nativeIsSupported");;
+            return  (boolean) newInstanceMethod.invoke(null);
         }catch (NoSuchMethodException | NullPointerException | IllegalAccessException | InvocationTargetException ex) {
             Log.e(TAG, "nativeVp9IsSupported err: " + ex.getMessage());
         }

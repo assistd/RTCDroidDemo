@@ -14,8 +14,8 @@ public class H264Utils {
     public static final String H264_LEVEL_3_1 = "1f";
     public static final String H264_CONSTRAINED_HIGH_3_1 = "640c1f";
     public static final String H264_CONSTRAINED_BASELINE_3_1 = "42e01f";
-    public static org.webrtc.VideoCodecInfo DEFAULT_H264_BASELINE_PROFILE_CODEC = new org.webrtc.VideoCodecInfo("H264", getDefaultH264Params(false));
-    public static org.webrtc.VideoCodecInfo DEFAULT_H264_HIGH_PROFILE_CODEC = new VideoCodecInfo("H264", getDefaultH264Params(true));
+    public static VideoCodecInfo DEFAULT_H264_BASELINE_PROFILE_CODEC = new VideoCodecInfo("H264", getDefaultH264Params(false));
+    public static VideoCodecInfo DEFAULT_H264_HIGH_PROFILE_CODEC = new VideoCodecInfo("H264", getDefaultH264Params(true));
 
     H264Utils() {
     }

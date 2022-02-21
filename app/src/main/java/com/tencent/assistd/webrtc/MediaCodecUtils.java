@@ -11,25 +11,27 @@ import java.util.Map;
 
 public class MediaCodecUtils {
     private static final String TAG = "MediaCodecUtils";
-    static final String EXYNOS_PREFIX = "OMX.Exynos.";
-    static final String INTEL_PREFIX = "OMX.Intel.";
-    static final String NVIDIA_PREFIX = "OMX.Nvidia.";
-    static final String QCOM_PREFIX = "OMX.qcom.";
-    static final String[] SOFTWARE_IMPLEMENTATION_PREFIXES = new String[]{"OMX.google.", "OMX.SEC.", "c2.android"};
-    static final int COLOR_QCOM_FORMATYVU420PackedSemiPlanar32m4ka = 2141391873;
-    static final int COLOR_QCOM_FORMATYVU420PackedSemiPlanar16m4ka = 2141391874;
-    static final int COLOR_QCOM_FORMATYVU420PackedSemiPlanar64x32Tile2m8ka = 2141391875;
-    static final int COLOR_QCOM_FORMATYUV420PackedSemiPlanar32m = 2141391876;
-    static final int[] DECODER_COLOR_FORMATS = new int[]{19, 21, 2141391872, 2141391873, 2141391874, 2141391875, 2141391876};
-    static final int[] ENCODER_COLOR_FORMATS = new int[]{19, 21, 2141391872, 2141391876};
-    static final int[] TEXTURE_COLOR_FORMATS = getTextureColorFormats();
+    public static final String EXYNOS_PREFIX = "omx.exynos.";
+    public static final String INTEL_PREFIX = "omx.intel.";
+    public static final String NVIDIA_PREFIX = "omx.nvidia.";
+    public static final String QCOM_PREFIX = "omx.qcom.";
+    public static final String HISI_PREFIX = "omx.hisi.";
+    public static final String QTI_PREFIX = "c2.qti.";
+    public static final String[] SOFTWARE_IMPLEMENTATION_PREFIXES = new String[]{"OMX.google.", "OMX.SEC.", "c2.android"};
+    public static final int COLOR_QCOM_FORMATYVU420PackedSemiPlanar32m4ka = 2141391873;
+    public static final int COLOR_QCOM_FORMATYVU420PackedSemiPlanar16m4ka = 2141391874;
+    public static final int COLOR_QCOM_FORMATYVU420PackedSemiPlanar64x32Tile2m8ka = 2141391875;
+    public static final int COLOR_QCOM_FORMATYUV420PackedSemiPlanar32m = 2141391876;
+    public static final int[] DECODER_COLOR_FORMATS = new int[]{19, 21, 2141391872, 2141391873, 2141391874, 2141391875, 2141391876};
+    public static final int[] ENCODER_COLOR_FORMATS = new int[]{19, 21, 2141391872, 2141391876};
+    public static final int[] TEXTURE_COLOR_FORMATS = getTextureColorFormats();
 
-    private static int[] getTextureColorFormats() {
+    public static int[] getTextureColorFormats() {
         return Build.VERSION.SDK_INT >= 18 ? new int[]{2130708361} : new int[0];
     }
 
     @Nullable
-    static Integer selectColorFormat(int[] supportedColorFormats, MediaCodecInfo.CodecCapabilities capabilities) {
+    public static Integer selectColorFormat(int[] supportedColorFormats, MediaCodecInfo.CodecCapabilities capabilities) {
         int[] var2 = supportedColorFormats;
         int var3 = supportedColorFormats.length;
 
@@ -49,7 +51,7 @@ public class MediaCodecUtils {
         return null;
     }
 
-    static boolean codecSupportsType(MediaCodecInfo info, VideoCodecMimeType type) {
+    public static boolean codecSupportsType(MediaCodecInfo info, VideoCodecMimeType type) {
         String[] var2 = info.getSupportedTypes();
         int var3 = var2.length;
 
@@ -63,7 +65,7 @@ public class MediaCodecUtils {
         return false;
     }
 
-    static Map<String, String> getCodecProperties(VideoCodecMimeType type, boolean highProfile) {
+    public static Map<String, String> getCodecProperties(VideoCodecMimeType type, boolean highProfile) {
         switch(type) {
             case VP8:
             case VP9:
@@ -75,7 +77,7 @@ public class MediaCodecUtils {
         }
     }
 
-    static boolean isHardwareAccelerated(MediaCodecInfo info) {
+    public static boolean isHardwareAccelerated(MediaCodecInfo info) {
         if (Build.VERSION.SDK_INT >= 29) {
             return isHardwareAcceleratedQOrHigher(info);
         } else {
@@ -84,11 +86,11 @@ public class MediaCodecUtils {
     }
 
     @TargetApi(29)
-    private static boolean isHardwareAcceleratedQOrHigher(MediaCodecInfo codecInfo) {
+    public static boolean isHardwareAcceleratedQOrHigher(MediaCodecInfo codecInfo) {
         return codecInfo.isHardwareAccelerated();
     }
 
-    static boolean isSoftwareOnly(MediaCodecInfo codecInfo) {
+    public static boolean isSoftwareOnly(MediaCodecInfo codecInfo) {
         if (Build.VERSION.SDK_INT >= 29) {
             return isSoftwareOnlyQOrHigher(codecInfo);
         } else {
@@ -108,10 +110,10 @@ public class MediaCodecUtils {
     }
 
     @TargetApi(29)
-    private static boolean isSoftwareOnlyQOrHigher(MediaCodecInfo codecInfo) {
+    public static boolean isSoftwareOnlyQOrHigher(MediaCodecInfo codecInfo) {
         return codecInfo.isSoftwareOnly();
     }
 
-    private MediaCodecUtils() {
+    public MediaCodecUtils() {
     }
 }

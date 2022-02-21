@@ -2,28 +2,27 @@ package com.tencent.assistd.webrtc;
 
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
-import android.os.Build;
-
+import android.media.MediaCodecInfo.CodecCapabilities;
+import android.os.Build.VERSION;
 import androidx.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.List;
 
-import org.webrtc.EglBase;
+import org.webrtc.EglBase.Context;
 import org.webrtc.Logging;
 import org.webrtc.Predicate;
 import org.webrtc.VideoCodecInfo;
 import org.webrtc.VideoDecoder;
 import org.webrtc.VideoDecoderFactory;
 
-import java.util.ArrayList;
-import java.util.List;
-
-public class MediaCodecVideoDecoderFactory implements VideoDecoderFactory {
+class MediaCodecVideoDecoderFactory implements VideoDecoderFactory {
     private static final String TAG = "MediaCodecVideoDecoderFactory";
     @Nullable
-    private final EglBase.Context sharedContext;
+    private final Context sharedContext;
     @Nullable
     private final Predicate<MediaCodecInfo> codecAllowedPredicate;
 
-    public MediaCodecVideoDecoderFactory(@Nullable EglBase.Context sharedContext, @Nullable Predicate<MediaCodecInfo> codecAllowedPredicate) {
+    public MediaCodecVideoDecoderFactory(@Nullable Context sharedContext, @Nullable Predicate<MediaCodecInfo> codecAllowedPredicate) {
         this.sharedContext = sharedContext;
         this.codecAllowedPredicate = codecAllowedPredicate;
     }
@@ -35,7 +34,7 @@ public class MediaCodecVideoDecoderFactory implements VideoDecoderFactory {
         if (info == null) {
             return null;
         } else {
-            MediaCodecInfo.CodecCapabilities capabilities = info.getCapabilitiesForType(type.mimeType());
+            CodecCapabilities capabilities = info.getCapabilitiesForType(type.mimeType());
             return new AndroidVideoDecoder(new MediaCodecWrapperFactoryImpl(), info.getName(), type, MediaCodecUtils.selectColorFormat(MediaCodecUtils.DECODER_COLOR_FORMATS, capabilities), this.sharedContext);
         }
     }
@@ -63,7 +62,7 @@ public class MediaCodecVideoDecoderFactory implements VideoDecoderFactory {
 
     @Nullable
     private MediaCodecInfo findCodecForType(VideoCodecMimeType type) {
-        if (Build.VERSION.SDK_INT < 19) {
+        if (VERSION.SDK_INT < 19) {
             return null;
         } else {
             for(int i = 0; i < MediaCodecList.getCodecCount(); ++i) {
@@ -99,10 +98,10 @@ public class MediaCodecVideoDecoderFactory implements VideoDecoderFactory {
 
     private boolean isH264HighProfileSupported(MediaCodecInfo info) {
         String name = info.getName();
-        if (Build.VERSION.SDK_INT >= 21 && name.startsWith("OMX.qcom.")) {
+        if (VERSION.SDK_INT >= 21 && name.startsWith("OMX.qcom.")) {
             return true;
         } else {
-            return Build.VERSION.SDK_INT >= 23 && name.startsWith("OMX.Exynos.");
+            return VERSION.SDK_INT >= 23 && name.startsWith("OMX.Exynos.");
         }
     }
 }

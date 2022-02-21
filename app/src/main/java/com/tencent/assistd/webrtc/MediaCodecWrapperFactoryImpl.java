@@ -61,6 +61,10 @@ public class MediaCodecWrapperFactoryImpl implements MediaCodecWrapperFactory {
             this.mediaCodec.releaseOutputBuffer(index, render);
         }
 
+        public void releaseOutputBuffer(int index, long renderTimestampNs) {
+            this.mediaCodec.releaseOutputBuffer(index, renderTimestampNs);
+        }
+
         public MediaFormat getOutputFormat() {
             return this.mediaCodec.getOutputFormat();
         }
