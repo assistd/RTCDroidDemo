@@ -133,7 +133,7 @@ public class RTCSignalClient {
         }
     }
 
-    public void sendCandidate(String mobileId, JSONObject description) {
+    public void sendCandidate(String mobileId, JSONObject candidate) {
         Log.i(TAG, "candidate: " + mobileId + (mSocket == null));
         try {
             JSONObject args = new JSONObject();
@@ -143,7 +143,7 @@ public class RTCSignalClient {
             jsData.put("from", mUserId);
             jsData.put("roomId", mRoomName);
             jsData.put("sessionId", mSessionId);
-            jsData.put("description", description);
+            jsData.put("candidate", candidate);
             args.put("data", jsData);
             Log.d(TAG, "sendCandidate: " + args.toString());
             sendMsg(args.toString());

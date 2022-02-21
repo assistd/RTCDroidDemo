@@ -23,4 +23,5 @@
     <string name="mobile_ctrl_recent">最近</string>
     <string name="mobile_ctrl_mute">静音</string>
     <string name="mobile_ctrl_exit">退出</string>
+    <string name="assistd">AssistD</string>
 </resources>

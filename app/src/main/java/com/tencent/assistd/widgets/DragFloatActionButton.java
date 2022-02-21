@@ -19,11 +19,10 @@ import androidx.appcompat.view.menu.MenuBuilder;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.internal.NavigationMenu;
 import com.tencent.assistd.R;
+import com.tencent.assistd.fabspeeddial.FabSpeedDial;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-
-import io.github.yavski.fabspeeddial.FabSpeedDial;
 
 public class DragFloatActionButton extends FabSpeedDial {
     private static final String TAG = "DragFloatActionButton";

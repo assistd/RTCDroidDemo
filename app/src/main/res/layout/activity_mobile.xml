@@ -37,6 +37,7 @@
         android:layout_height="wrap_content"
         android:gravity="top|start"
         app:fabGravity="top_start"
+        android:visibility="gone"
         app:fabMenu="@menu/mobile_ctrl"
         app:miniFabTitleBackgroundTint="@android:color/white"
         app:miniFabDrawableTint="@color/colorPrimary"

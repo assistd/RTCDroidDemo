@@ -11,6 +11,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
@@ -18,7 +19,6 @@ import android.view.WindowManager;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.view.KeyEvent;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBar;
@@ -28,18 +28,20 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.internal.NavigationMenu;
 import com.tencent.assistd.R;
 import com.tencent.assistd.adapter.MobileListAdapter;
+import com.tencent.assistd.fabspeeddial.FabSpeedDial;
+import com.tencent.assistd.fabspeeddial.SimpleMenuListenerAdapter;
 import com.tencent.assistd.signal.Mobile;
 import com.tencent.assistd.signal.RTCSignalClient;
 import com.tencent.assistd.utils.Settings;
 import com.tencent.assistd.utils.VolumeChangeObserver;
+import com.tencent.assistd.utils.WindowHelper;
+import com.tencent.assistd.webrtc.DefaultVideoDecoderFactory;
 import com.tencent.assistd.widgets.DragFloatActionButton;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.webrtc.AudioTrack;
 import org.webrtc.DataChannel;
-import org.webrtc.DefaultVideoDecoderFactory;
-import org.webrtc.DefaultVideoEncoderFactory;
 import org.webrtc.EglBase;
 import org.webrtc.IceCandidate;
 import org.webrtc.Logging;
@@ -65,9 +67,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import io.github.yavski.fabspeeddial.FabSpeedDial;
-import io.github.yavski.fabspeeddial.SimpleMenuListenerAdapter;
 
 public class MobileActivity extends AppCompatActivity {
     private static final String TAG = "MobileActivity";
@@ -173,7 +172,7 @@ public class MobileActivity extends AppCompatActivity {
         RTCSignalClient.getInstance().leaveRoom();
     }
 
-    private FabSpeedDial.MenuListener ctrlMenuListener = new SimpleMenuListenerAdapter() {
+    private final FabSpeedDial.MenuListener ctrlMenuListener = new SimpleMenuListenerAdapter() {
         @Override
         public boolean onPrepareMenu(NavigationMenu navigationMenu) {
             @SuppressLint("RestrictedApi") MenuItem menuItem = navigationMenu.findItem(R.id.action_mute);
@@ -187,6 +186,7 @@ public class MobileActivity extends AppCompatActivity {
             return true ; //false : dont show menu
         }
 
+        @SuppressLint("NonConstantResourceId")
         @Override
         public boolean onMenuItemSelected(MenuItem menuItem) {
             switch (menuItem.getItemId()) {
@@ -209,12 +209,8 @@ public class MobileActivity extends AppCompatActivity {
         }
     };
 
-//    public void onCtrlGroupClick(View view) {
-//        mPopupButtonMenu.show();
-//    }
-
-    private Map<Integer, int[]> mTouchPosMap = new HashMap<>();
-    private View.OnTouchListener touchListener = new View.OnTouchListener() {
+    private final Map<Integer, int[]> mTouchPosMap = new HashMap<>();
+    private final View.OnTouchListener touchListener = new View.OnTouchListener() {
         @SuppressLint("ClickableViewAccessibility")
         @Override
         public boolean onTouch(View v, MotionEvent ev) {
@@ -292,7 +288,19 @@ public class MobileActivity extends AppCompatActivity {
             jsonMsg.put("pressure", pressure);
             sendChannelMsg(jsonMsg.toString());
         } catch (JSONException e) {
-            Log.e(TAG, "onTouchSend err: " + e.getMessage());
+            Log.e(TAG, "sendCtrl err: " + e.getMessage());
+        }
+
+    }
+
+    private void sendResetVideo() {
+        try {
+            JSONObject jsonMsg = new JSONObject();
+            jsonMsg.put("type", 20);
+            sendChannelMsg(jsonMsg.toString());
+            Log.d(TAG, "sendResetVideo ");
+        } catch (JSONException e) {
+            Log.e(TAG, "sendResetVideo err: " + e.getMessage());
         }
     }
 
@@ -308,7 +316,7 @@ public class MobileActivity extends AppCompatActivity {
             jsonMsg.put("action", 1);
             sendChannelMsg(jsonMsg.toString());
         } catch (JSONException e) {
-            Log.e(TAG, "onKeyPressSend err: " + e.getMessage());
+            Log.e(TAG, "sendKeyPress err: " + e.getMessage());
         }
     }
 
@@ -442,8 +450,14 @@ public class MobileActivity extends AppCompatActivity {
     public void doStartCall(String mobileId) {
         if (mPeerConnection == null) {
             mPeerConnection = createPeerConnection();
-            mDataChannel = mPeerConnection.createDataChannel("ClientDataChannel", new DataChannel.Init());
         }
+        if (mPeerConnection == null) {
+            Toast.makeText(getApplicationContext(), "连接失败",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        mDataChannel = mPeerConnection.createDataChannel("ClientDataChannel", new DataChannel.Init());
         selectedMobileId = mobileId;
         MediaConstraints mediaConstraints = new MediaConstraints();
         mediaConstraints.mandatory.add(new MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"));
@@ -469,6 +483,7 @@ public class MobileActivity extends AppCompatActivity {
     public void doEndCall() {
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        WindowHelper.makeNavigationVisible(MobileActivity.this, true);
         hanup();
     }
 
@@ -488,6 +503,11 @@ public class MobileActivity extends AppCompatActivity {
     public PeerConnection createPeerConnection() {
         Log.i(TAG, "Create PeerConnection ...");
         PeerConnection.RTCConfiguration configuration = new PeerConnection.RTCConfiguration(new ArrayList<>());
+        configuration.iceServers = new ArrayList<>();
+        configuration.iceTransportsType = PeerConnection.IceTransportsType.ALL;
+//        configuration.iceServers.add(new PeerConnection.IceServer("stun:43.134.24.200:3478", "cloudgame", "cloudgame"));
+//        configuration.iceServers.add(new PeerConnection.IceServer("stun:stun.l.google.com:19302"));
+//        configuration.iceServers.add(new PeerConnection.IceServer("stun:stun.voipbuster.com:3478"));
         PeerConnection connection = mPeerConnectionFactory.createPeerConnection(configuration, mPeerConnectionObserver);
         if (connection == null) {
             Log.e(TAG, "Failed to createPeerConnection !");
@@ -497,11 +517,11 @@ public class MobileActivity extends AppCompatActivity {
     }
 
     public PeerConnectionFactory createPeerConnectionFactory(Context context) {
-        final VideoEncoderFactory encoderFactory;
+//        final VideoEncoderFactory encoderFactory;
         final VideoDecoderFactory decoderFactory;
 
-        encoderFactory = new DefaultVideoEncoderFactory(
-                mRootEglBase.getEglBaseContext(), false /* enableIntelVp8Encoder */, true);
+//        encoderFactory = new DefaultVideoEncoderFactory(
+//                mRootEglBase.getEglBaseContext(), false /* enableIntelVp8Encoder */, true);
         decoderFactory = new DefaultVideoDecoderFactory(mRootEglBase.getEglBaseContext());
 
         PeerConnectionFactory.initialize(PeerConnectionFactory.InitializationOptions.builder(context)
@@ -509,7 +529,7 @@ public class MobileActivity extends AppCompatActivity {
                 .createInitializationOptions());
 
         PeerConnectionFactory.Builder builder = PeerConnectionFactory.builder()
-                .setVideoEncoderFactory(encoderFactory)
+//                .setVideoEncoderFactory(encoderFactory)
                 .setVideoDecoderFactory(decoderFactory);
         builder.setOptions(null);
 
@@ -592,9 +612,11 @@ public class MobileActivity extends AppCompatActivity {
                 mVideoSink = new ProxyVideoSink();
                 mVideoSink.setTarget(mRemoteSurfaceView);
                 remoteVideoTrack.addSink(mVideoSink);
+//                resetHandler.sendMessageDelayed(new Message(), 1000);
                 runOnUiThread(() -> {
                     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                     getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+                    WindowHelper.makeNavigationVisible(MobileActivity.this, false);
                 });
             }else if(track instanceof AudioTrack) {
                 mAudioTrack = (AudioTrack) track;
@@ -674,6 +696,12 @@ public class MobileActivity extends AppCompatActivity {
         public void handleMessage(@NonNull Message msg) {
             super.handleMessage(msg);
             isExit = false;
+        }
+    };
+    Handler resetHandler = new Handler(Looper.getMainLooper()) {
+        @Override
+        public void handleMessage(@NonNull Message msg) {
+            sendResetVideo();
         }
     };
     public void prepareBack() {
