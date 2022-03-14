@@ -534,9 +534,11 @@ public class MobileActivity extends AppCompatActivity {
         PeerConnection.RTCConfiguration configuration = new PeerConnection.RTCConfiguration(new ArrayList<>());
         configuration.iceServers = new ArrayList<>();
         configuration.iceTransportsType = PeerConnection.IceTransportsType.ALL;
-//        configuration.iceServers.add(new PeerConnection.IceServer("stun:43.134.24.200:3478", "cloudgame", "cloudgame"));
-//        configuration.iceServers.add(new PeerConnection.IceServer("stun:stun.l.google.com:19302"));
-//        configuration.iceServers.add(new PeerConnection.IceServer("stun:stun.voipbuster.com:3478"));
+        configuration.iceServers.add(new PeerConnection.IceServer("stun:stun.l.google.com:19302"));
+        configuration.iceServers.add(new PeerConnection.IceServer("stun:stun.voipbuster.com:3478"));
+        configuration.iceServers.add(new PeerConnection.IceServer("stun:42.192.40.58:3478?transport=udp"));
+        configuration.iceServers.add(new PeerConnection.IceServer("turn:42.192.40.58:3478?transport=udp", "ddssingsong", "123456"));
+        configuration.iceServers.add(new PeerConnection.IceServer("turn:42.192.40.58:3478?transport=tcp", "ddssingsong", "123456"));
         PeerConnection connection = mPeerConnectionFactory.createPeerConnection(configuration, mPeerConnectionObserver);
         if (connection == null) {
             Log.e(TAG, "Failed to createPeerConnection !");
