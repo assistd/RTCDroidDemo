@@ -551,7 +551,7 @@ public class MobileActivity extends AppCompatActivity {
 //        final VideoEncoderFactory encoderFactory;
         final VideoDecoderFactory decoderFactory;
 
-//        encoderFactory = new DefaultVideoEncoderFactory(
+//        encoderFactory = new DefaultVideoEncoderFactory(:
 //                mRootEglBase.getEglBaseContext(), false /* enableIntelVp8Encoder */, true);
         decoderFactory = new DefaultVideoDecoderFactory(mRootEglBase.getEglBaseContext());
 
